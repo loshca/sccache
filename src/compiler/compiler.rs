@@ -1002,7 +1002,7 @@ mod test {
     use std::u64;
     use crate::test::mock_storage::MockStorage;
     use crate::test::utils::*;
-    use tokio::runtime::current_thread::Runtime;
+    use tokio_compat::runtime::current_thread::Runtime;
 
     #[test]
     fn test_detect_compiler_kind_gcc() {

@@ -214,6 +214,7 @@ ArgData!{
     DepFile(PathBuf),
     ProgramDatabase(PathBuf),
     DebugInfo,
+    PassThroughFlag,
     XClang(OsString),
 }
 
@@ -235,6 +236,7 @@ counted_array!(static ARGS: [ArgInfo<ArgData>; _] = [
     flag!("-Fx", TooHardFlag),
     take_arg!("-I", PathBuf, CanBeSeparated, PreprocessorArgumentPath),
     take_arg!("-U", OsString, Concatenated, PreprocessorArgument),
+    flag!("-WX", PassThroughFlag),
     take_arg!("-Xclang", OsString, Separated, XClang),
     flag!("-Zi", DebugInfo),
     flag!("-c", DoCompilation),
@@ -263,6 +265,7 @@ pub fn parse_arguments(arguments: &[OsString], cwd: &Path, is_clang: bool) -> Co
         if let Some(arg) = i.split_prefix("/") {
             let mut dash = OsString::from("-");
             dash.push(&arg);
+            debug!("in convert: {:?}", dash);
             dash
         } else {
             i.clone()
@@ -272,6 +275,7 @@ pub fn parse_arguments(arguments: &[OsString], cwd: &Path, is_clang: bool) -> Co
     for arg in ArgsIter::new(it, &ARGS[..]) {
         let arg = try_or_cannot_cache!(arg, "argument parse");
         match arg.get_data() {
+            Some(PassThroughFlag) => {}
             Some(TooHardFlag) |
             Some(TooHard(_)) |
             Some(TooHardPath(_)) => {
@@ -300,11 +304,16 @@ pub fn parse_arguments(arguments: &[OsString], cwd: &Path, is_clang: bool) -> Co
                     Argument::Raw(ref val) => {
                         if input_arg.is_some() {
                             // Can't cache compilations with multiple inputs.
+                            debug!("input dup: {:?}", val);
                             cannot_cache!("multiple input files");
                         }
+                        debug!("input: {:?}", val);
                         input_arg = Some(val.clone());
                     }
-                    Argument::UnknownFlag(ref flag) => common_args.push(flag.clone()),
+                    Argument::UnknownFlag(ref flag) => {
+                        debug!("unknown: {:?}", flag);
+                        common_args.push(flag.clone())
+                    },
                     _ => unreachable!(),
                 }
             }
@@ -474,7 +483,7 @@ pub fn preprocess<T>(creator: &T,
     where T: CommandCreatorSync
 {
     let mut cmd = creator.clone().new_command_sync(executable);
-    cmd.arg("-E")
+    cmd.arg("-EP")
         .arg(&parsed_args.input)
         .arg("-nologo")
         .args(&parsed_args.preprocessor_args)
